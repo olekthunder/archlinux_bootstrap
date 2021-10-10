@@ -36,8 +36,8 @@ class CommandNotSuccessful(Exception):
     pass
 
 
-def run(cmd: str) -> None:
-    if subprocess.call(cmd, shell=True) != 0:
+def run(cmd: str, force: bool = False) -> None:
+    if not force and subprocess.call(cmd, shell=True) != 0:
         raise CommandNotSuccessful(cmd)
 
 
@@ -47,10 +47,10 @@ def ask(prompt: str) -> str:
 
 def partion_the_disk(device: str) -> None:
     run("mkdir /key && mount `findfs LABEL=lukskey` /key")
-    run(f"yes | parted {device} -- mklabel gpt")
-    run(f"yes | parted {device} -- mkpart ESP fat32 1MiB 512MiB")
-    run(f"yes | parted {device} -- mkpart primary 512MiB 100%")
-    run(f"yes | parted {device} -- set 1 esp on")
+    run(f"yes | parted {device} -- mklabel gpt", force=True)
+    run(f"yes | parted {device} -- mkpart ESP fat32 1MiB 512MiB", force=True)
+    run(f"yes | parted {device} -- mkpart primary 512MiB 100%", force=True)
+    run(f"yes | parted {device} -- set 1 esp on", force=True)
     key = "/key/key"
     root_label = "arch"
     disk_partitions = (
