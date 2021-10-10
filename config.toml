@@ -1,0 +1,10 @@
+country = "Ukraine"
+kernel_package = "linux-lts"
+time_zone = "Europe/Kiev"
+hostname = "gimli"
+# A list of possible values can be found in /etc/locale.gen
+locales = ["en_US.UTF-8 UTF-8", "uk_UA.UTF-8 UTF-8"]
+
+[lc_conf_vars]
+"LANG" = "en_US.UTF-8"
+"LC_TIME" = "uk_UA.UTF-8"
