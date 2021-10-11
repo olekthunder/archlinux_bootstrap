@@ -156,3 +156,4 @@ def bootstrap():
     run("mkinitcpio -P")
     run("passwd")
     run("bootctl --path=/boot install")
+    run("reboot")
