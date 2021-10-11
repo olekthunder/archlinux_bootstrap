@@ -83,6 +83,9 @@ def sync_mirrors(country: str) -> None:
         f"reflector --save /etc/pacman.d/mirrorlist --country {country} "
         "--protocol https --latest 10"
     )
+    # partial upgrades are not supported, but I'll take the risk
+    run("pacman -Sy rankmirrors --noconfirm")
+    run("rankmirrors -n 5 /etc/pacman.d/mirrorlist > /etc/pacman.d/mirrorlist")
 
 
 def genfstab(outfile: str) -> None:
