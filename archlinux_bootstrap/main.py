@@ -1,14 +1,13 @@
-import operator
 import os
 import subprocess
 import sys
 import time
+import json
 from dataclasses import dataclass
 from typing import Dict, List
 
 import jinja2
 import marshmallow_dataclass
-import psutil
 import toml
 
 
@@ -46,6 +45,20 @@ def ask(prompt: str) -> str:
     return input(f"{prompt.strip().capitalize()} and press ENTER:\n")
 
 
+def disk_partitions(device: str) -> List[str]:
+    data = json.loads(
+        subprocess.run(
+            "lsblk --json -o NAME,PATH".split(), capture_output=True, text=True
+        ).stdout
+    )
+    return [
+        c["path"]
+        for d in data["blockdevices"]
+        if d["path"] == device
+        for c in d["children"]
+    ]
+
+
 def partion_the_disk(device: str) -> None:
     run("mkdir /key && mount `findfs LABEL=lukskey` /key")
     run(f"yes | parted {device} -- mklabel gpt", force=True)
@@ -54,13 +67,7 @@ def partion_the_disk(device: str) -> None:
     run(f"yes | parted {device} -- set 1 esp on", force=True)
     key = "/key/key"
     root_label = "arch"
-    disk_partitions = (
-        p for p in psutil.disk_partitions() if device in p.device
-    )
-    boot, root = (
-        p.device
-        for p in sorted(disk_partitions, key=operator.attrgetter("device"))
-    )
+    boot, root = sorted(disk_partitions(device))
     run(f"yes YES | cryptsetup luksFormat {root} {key} --label cryptroot")
     run(f"cryptsetup luksOpen {root} cryptroot --key-file {key}")
     run(f"mkfs.ext4 -L {root_label} /dev/mapper/cryptroot")
