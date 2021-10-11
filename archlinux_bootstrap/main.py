@@ -84,7 +84,7 @@ def sync_mirrors(country: str) -> None:
         "--protocol https --latest 10"
     )
     # partial upgrades are not supported, but I'll take the risk
-    run("pacman -Sy rankmirrors --noconfirm")
+    run("pacman -Sy pacman-contrib --noconfirm")
     run("rankmirrors -n 5 /etc/pacman.d/mirrorlist > /etc/pacman.d/mirrorlist")
 
 
