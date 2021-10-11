@@ -37,7 +37,8 @@ class CommandNotSuccessful(Exception):
 
 
 def run(cmd: str, force: bool = False) -> None:
-    if not force and subprocess.call(cmd, shell=True) != 0:
+    rv = subprocess.call(cmd, shell=True)
+    if not force and rv != 0:
         raise CommandNotSuccessful(cmd)
 
 
