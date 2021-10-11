@@ -4,7 +4,7 @@ import sys
 import time
 import json
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, Iterable, List
 
 import jinja2
 import marshmallow_dataclass
@@ -36,6 +36,11 @@ class CommandNotSuccessful(Exception):
 
 
 def run(cmd: str, force: bool = False) -> None:
+    """
+    Execute cmd from shell.
+    If force is True, it won't raise an exeptionif cmd exit code isn't 
+    equal to 0
+    """
     rv = subprocess.call(cmd, shell=True)
     if not force and rv != 0:
         raise CommandNotSuccessful(cmd)
@@ -80,12 +85,12 @@ def partion_the_disk(device: str) -> None:
 def sync_mirrors(country: str) -> None:
     country = country.strip().capitalize()
     run(
-        f"reflector --save /etc/pacman.d/mirrorlist --country {country} "
+        f"reflector --save /etc/pacman.d/mirrorlist.back --country {country} "
         "--protocol https --latest 10"
     )
     # partial upgrades are not supported, but I'll take the risk
     run("pacman -Sy pacman-contrib --noconfirm")
-    run("rankmirrors -n 5 /etc/pacman.d/mirrorlist > /etc/pacman.d/mirrorlist")
+    run("rankmirrors -n 5 /etc/pacman.d/mirrorlist.back > /etc/pacman.d/mirrorlist")
 
 
 def genfstab(outfile: str) -> None:
@@ -99,6 +104,7 @@ def set_time_zone(tz: str) -> None:
 def write_file(path: str, contents: str):
     # print(path)
     # print(contents)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.write(contents)
 
@@ -112,6 +118,9 @@ def write_files(cfg: AppConfig, base_dir: str):
         write_file("/" + t, env.get_template(t).render(cfg=cfg))
 
 
+def install_packages(pkgs: Iterable[str]):
+    run(f"pacman -S --noconfirm {' '.join(pkgs)}")
+
 def bootstrap():
     subprocess.call("cd ~", shell=True)
     if not is_efi():
@@ -120,7 +129,7 @@ def bootstrap():
     run("timedatectl set-ntp true")
     partion_the_disk(ask("Enter a disk to partition"))
     sync_mirrors(cfg.country)
-    run(f"pacstrap /mnt base {cfg.kernel_package} linux-firmware")
+    run(f"pacstrap /mnt base base-devel {cfg.kernel_package} linux-firmware intel-ucode")
     genfstab("/mnt/etc/fstab")
     run("arch-chroot /mnt")
     set_time_zone(cfg.time_zone)
@@ -129,4 +138,4 @@ def bootstrap():
     run("locale-gen")
     run("mkinitcpio -P")
     run("passwd")
-    run("bootctl install")
+    run("bootctl --path=/boot install")
