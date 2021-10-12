@@ -46,6 +46,10 @@ def run(cmd: str, force: bool = False) -> None:
         raise CommandNotSuccessful(cmd)
 
 
+def arch_chroot_run(cmd: str) -> None:
+    run(f"arch-chroot /mnt {cmd}")
+
+
 def ask(prompt: str) -> str:
     return input(f"{prompt.strip().capitalize()} and press ENTER:\n")
 
@@ -99,61 +103,40 @@ def genfstab(outfile: str) -> None:
     run(f"genfstab -U /mnt >> {outfile}")
 
 
-def set_time_zone(tz: str) -> None:
-    run(f"ln -sf /usr/share/zoneinfo/{tz} /etc/localtime")
-
-
 def write_file(path: str, contents: str):
-    # print(path)
-    # print(contents)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.write(contents)
 
 
-def write_files(cfg: AppConfig, base_dir: str):
+def write_files(base_dir: str, cfg: AppConfig):
     env = jinja2.Environment(
         loader=jinja2.PackageLoader("archlinux_bootstrap", "files"),
         autoescape=jinja2.select_autoescape(),
     )
     for t in env.list_templates():
-        write_file("/" + t, env.get_template(t).render(cfg=cfg))
-
-
-def install_packages(pkgs: Iterable[str]):
-    run(f"pacman -S --noconfirm {' '.join(pkgs)}")
-
-
-def arch_chroot(location: str) -> None:
-    """https://wiki.archlinux.org/title/chroot#Using_chroot"""
-    os.chdir(location)
-    run("mount -t proc /proc proc/")
-    run("mount -t sysfs /sys sys/")
-    run("mount --rbind /dev dev/")
-    run("mount --rbind /run run/")
-    run("mount --rbind /sys/firmware/efi/efivars sys/firmware/efi/efivars/")
-    run("cp /etc/resolv.conf etc/resolv.conf")
-    os.chroot(location)
+        write_file(base_dir + t, env.get_template(t).render(cfg=cfg))
 
 
 def bootstrap():
-    subprocess.call("cd ~", shell=True)
     if not is_efi():
-        sys.exit("Not and EFI setup. Not supported by now. Exitting.")
+        sys.exit("Not an EFI setup. Not supported by now. Exitting.")
     cfg = load_config("config.toml")
     run("timedatectl set-ntp true")
     partion_the_disk(ask("Enter a disk to partition"))
     sync_mirrors(cfg.country)
     run(
-        f"pacstrap /mnt base base-devel {cfg.kernel_package} linux-firmware intel-ucode"
+        f"pacstrap /mnt base base-devel {cfg.kernel_package} "
+        "linux-firmware intel-ucode"
     )
     genfstab("/mnt/etc/fstab")
-    arch_chroot("/mnt")
-    set_time_zone(cfg.time_zone)
-    run("hwclock --systohc")
-    write_files(cfg, "files")
-    run("locale-gen")
-    run("mkinitcpio -P")
-    run("passwd")
-    run("bootctl --path=/boot install")
-    run("reboot")
+    write_files("/mnt", cfg)
+    arch_chroot_run(
+        f"ln -sf /usr/share/zoneinfo/{cfg.time_zone} /etc/localtime"
+    )
+    arch_chroot_run("hwclock --systohc")
+    arch_chroot_run("locale-gen")
+    arch_chroot_run("mkinitcpio -P")
+    arch_chroot_run("passwd")
+    arch_chroot_run("bootctl --path=/boot install")
+    arch_chroot_run("reboot")
