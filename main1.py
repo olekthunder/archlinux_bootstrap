@@ -6,6 +6,31 @@ from contextlib import contextmanager, ExitStack
 from archlinux_bootstrap.main import load_config, AppConfig
 
 
+# Remove password arg and use keyfile only
+class Luks2(archinstall.luks2):
+    def __init__(
+        self,
+        partition,
+        mountpoint,
+        key_file=None,
+        auto_unmount=False,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(
+            partition,
+            mountpoint,
+            None,
+            key_file=key_file,
+            auto_unmount=auto_unmount,
+            *args,
+            **kwargs,
+        )
+    
+    def __enter__(self):
+        self.unlock(self.partition, self.mountpoint, self.key_file)
+
+
 @contextmanager
 def mount_key(cfg: AppConfig):
     archinstall.SysCommand(
@@ -15,7 +40,7 @@ def mount_key(cfg: AppConfig):
     try:
         yield
     finally:
-        archinstall.SysCommand(f"unmount {cfg.key_mountpoint}")
+        archinstall.SysCommand(f"umount {cfg.key_mountpoint}")
         archinstall.SysCommand(f"rmdir {cfg.key_mountpoint}")
 
 
@@ -96,7 +121,7 @@ def partition_the_disk(disk: archinstall.BlockDevice, cfg: AppConfig):
         SysCommand(
             f"cryptsetup -q luksFormat {root.path} {key_file} --label cryptroot"
         )
-        with archinstall.luks2(
+        with Luks2(
             root, "cryptroot", key_file=key_file
         ) as unlocked_root:
             # Format root as ext4 and add "arch" label to it
