@@ -100,6 +100,9 @@ def misc_install(stack: ExitStack, cfg: AppConfig):
         for k, v in cfg.lc_conf_vars.items():
             fh.write(f"{k}={v}\n")
     SysCommand(f'/usr/bin/arch-chroot {i.target} locale-gen')
+    i.set_timezone(cfg.time_zone)
+    i.activate_ntp()
+    SysCommand(f"/usr/bin/arch-chroot {i.target} hwclock --systohc")
     SysCommand(f"/usr/bin/arch-chroot {i.target} chmod 700 /root")
     i.MODULES.append("vfat")
     i.mkinitcpio("-P")
@@ -111,7 +114,7 @@ def misc_install(stack: ExitStack, cfg: AppConfig):
             level=logging.INFO,
         )
         function(i)
-    setup_bootloader(i)
+    setup_bootloader(i, cfg)
 
 
 def partition_the_disk(
