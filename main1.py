@@ -26,16 +26,16 @@ class Luks2(archinstall.luks2):
             *args,
             **kwargs,
         )
-    
+
     def __enter__(self):
         return self.unlock(self.partition, self.mountpoint, self.key_file)
 
 
 @contextmanager
 def mount_key(cfg: AppConfig):
+    archinstall.SysCommand(f"mkdir {cfg.key_mountpoint}")
     archinstall.SysCommand(
-        f"mkdir {cfg.key_mountpoint} "
-        f"&& mount `findfs LABEL={cfg.key_label}` {cfg.key_mountpoint}"
+        f"mount /dev/disk/by-label/{cfg.key_label} {cfg.key_mountpoint}"
     )
     try:
         yield
@@ -67,68 +67,70 @@ def setup_bootloader(i: archinstall.Installer, cfg: AppConfig):
     i.helper_flags["bootloader"] = "systemd-bootctl"
 
 
-def misc_install(cfg: AppConfig):
-    with archinstall.Installer("/mnt") as i:
-        vendor = archinstall.cpu_vendor()
-        if vendor == "AuthenticAMD":
-            i.base_packages.append("amd-ucode")
-            if (
-                ucode := pathlib.Path(f"{i.target}/boot/amd-ucode.img")
-            ).exists():
-                ucode.unlink()
-        elif vendor == "GenuineIntel":
-            i.base_packages.append("intel-ucode")
-            if (
-                ucode := pathlib.Path(f"{i.target}/boot/intel-ucode.img")
-            ).exists():
-                ucode.unlink()
-        i.pacstrap(i.base_packages)
-        i.helper_flags["base-strapped"] = True
-        i.set_hostname(cfg.hostname)
-        # Set locale
-        # i.set_locale does not support LC_* vars
-        with open(f"{i.target}/etc/locale.gen", "a") as fh:
-            for locale in cfg.locales:
-                fh.write(f"{locale}\n")
-        with open(f"{i.target}/etc/locale.conf", "w") as fh:
-            for i, v in cfg.lc_conf_vars.items():
-                fh.write(f"{i}={v}\n")
-        SysCommand(f"/usr/bin/arch-chroot {i.target} chmod 700 /root")
-        i.MODULES.append("vfat")
-        i.mkinitcpio("-P")
-        i.helper_flags["base"] = True
-        # Run registered post-install hooks
-        for function in i.post_base_install:
-            i.log(
-                f"Running post-installation hook: {function}",
-                level=logging.INFO,
-            )
-            function(i)
-        setup_bootloader(i)
-
-
-def partition_the_disk(disk: archinstall.BlockDevice, cfg: AppConfig):
-    with archinstall.Filesystem(disk, archinstall.GPT) as fs:
-        # 512mb boot, the rest is for root
-        fs.use_entire_disk("ext4")
-        boot = fs.find_partition("/boot")
-        boot.format("vfat")
-        root = fs.find_partition("/")
-        root.encrypted = True
-        # Encrypt root
-        key_file = cfg.key_mountpoint / cfg.key_file
-        archinstall.log("Encrypting root...")
-        SysCommand(
-            f"cryptsetup -q luksFormat {root.path} {key_file} --label cryptroot"
+def misc_install(stack: ExitStack, cfg: AppConfig):
+    i = stack.enter_context(archinstall.Installer("/mnt"))
+    vendor = archinstall.cpu_vendor()
+    if vendor == "AuthenticAMD":
+        i.base_packages.append("amd-ucode")
+        if (
+            ucode := pathlib.Path(f"{i.target}/boot/amd-ucode.img")
+        ).exists():
+            ucode.unlink()
+    elif vendor == "GenuineIntel":
+        i.base_packages.append("intel-ucode")
+        if (
+            ucode := pathlib.Path(f"{i.target}/boot/intel-ucode.img")
+        ).exists():
+            ucode.unlink()
+    i.pacstrap(i.base_packages)
+    i.helper_flags["base-strapped"] = True
+    i.set_hostname(cfg.hostname)
+    # Set locale
+    # i.set_locale does not support LC_* vars
+    with open(f"{i.target}/etc/locale.gen", "a") as fh:
+        for locale in cfg.locales:
+            fh.write(f"{locale}\n")
+    with open(f"{i.target}/etc/locale.conf", "w") as fh:
+        for i, v in cfg.lc_conf_vars.items():
+            fh.write(f"{i}={v}\n")
+    SysCommand(f"/usr/bin/arch-chroot {i.target} chmod 700 /root")
+    i.MODULES.append("vfat")
+    i.mkinitcpio("-P")
+    i.helper_flags["base"] = True
+    # Run registered post-install hooks
+    for function in i.post_base_install:
+        i.log(
+            f"Running post-installation hook: {function}",
+            level=logging.INFO,
         )
-        with Luks2(
-            root, "cryptroot", key_file=key_file
-        ) as unlocked_root:
-            # Format root as ext4 and add "arch" label to it
-            archinstall.log("Formatting root as ext4")
-            archinstall.SysCommand("mkfs.ext4 -L arch /dev/mapper/cryptroot")
-            unlocked_root.mount("/mnt")
-            boot.mount("/mnt/boot")
+        function(i)
+    setup_bootloader(i)
+
+
+def partition_the_disk(
+    stack: ExitStack, disk: archinstall.BlockDevice, cfg: AppConfig
+):
+    fs = stack.enter_context(archinstall.Filesystem(disk, archinstall.GPT))
+    # 512mb boot, the rest is for root
+    fs.use_entire_disk("ext4")
+    boot = fs.find_partition("/boot")
+    boot.format("vfat")
+    root = fs.find_partition("/")
+    root.encrypted = True
+    # Encrypt root
+    key_file = cfg.key_mountpoint / cfg.key_file
+    archinstall.log("Encrypting root...")
+    SysCommand(
+        f"cryptsetup -q luksFormat {root.path} {key_file} --label cryptroot"
+    )
+    unlocked_root = stack.enter_context(
+        Luks2(root, "cryptroot", key_file=key_file)
+    )
+    # Format root as ext4 and add "arch" label to it
+    archinstall.log("Formatting root as ext4")
+    archinstall.SysCommand("mkfs.ext4 -L arch /dev/mapper/cryptroot")
+    unlocked_root.mount("/mnt")
+    boot.mount("/mnt/boot")
 
 
 def main():
@@ -136,8 +138,9 @@ def main():
     archinstall.arguments["harddrive"] = archinstall.select_disk(
         archinstall.all_disks()
     )
-    with mount_key(cfg):
-        partition_the_disk(archinstall.arguments["harddrive"], cfg)
+    with ExitStack() as stack:
+        stack.enter_context(mount_key(cfg))
+        partition_the_disk(stack, archinstall.arguments["harddrive"], cfg)
         misc_install(cfg)
 
 
