@@ -5,20 +5,23 @@ import time
 import json
 from dataclasses import dataclass
 from typing import Dict, Iterable, List
-
+from marshmallow import fields, Schema
 import jinja2
-import marshmallow_dataclass
 import toml
+import pathlib
+
+MOUNTPOINT="/mnt"
 
 
-@dataclass
-class AppConfig:
-    country: str
-    kernel_package: str
-    time_zone: str
-    locales: List[str]
-    lc_conf_vars: Dict[str, str]
-    hostname: str
+class AppConfig(Schema):
+    kernel_package = fields.String()
+    time_zone = fields.String()
+    locales = fields.List(fields.String)
+    lc_conf_vars = fields.Dict(fields.String(), fields.String())
+    hostname = fields.String()
+    key_label = fields.Function(pathlib.Path)
+    key_mountpoint = fields.Function(pathlib.Path)
+    key_file = fields.Function(pathlib.Path)
 
 
 def is_efi():
@@ -26,7 +29,7 @@ def is_efi():
 
 
 def load_config(location: str) -> AppConfig:
-    return marshmallow_dataclass.class_schema(AppConfig).from_dict(
+    return AppConfig.from_dict(
         toml.load(location)
     )
 
@@ -47,7 +50,7 @@ def run(cmd: str, force: bool = False) -> None:
 
 
 def arch_chroot_run(cmd: str) -> None:
-    run(f"arch-chroot /mnt {cmd}")
+    run(f"arch-chroot {MOUNTPOINT} {cmd}")
 
 
 def ask(prompt: str) -> str:
@@ -77,30 +80,28 @@ def partion_the_disk(device: str) -> None:
     key = "/key/key"
     root_label = "arch"
     boot, root = sorted(disk_partitions(device))
-    run(f"yes YES | cryptsetup luksFormat {root} {key} --label cryptroot")
+    run(f"cryptsetup -q luksFormat {root} {key} --label cryptroot")
     run(f"cryptsetup luksOpen {root} cryptroot --key-file {key}")
     run(f"mkfs.ext4 -L {root_label} /dev/mapper/cryptroot")
     time.sleep(1)
-    run(f"mount /dev/disk/by-label/{root_label} /mnt")
-    run("mkdir /mnt/boot")
-    run(f"mount {boot} /mnt/boot")
+    run(f"mount /dev/disk/by-label/{root_label} {MOUNTPOINT}")
+    mnt_boot = os.path.join(MOUNTPOINT, "boot")
+    run(f"mkdir {mnt_boot}")
+    run(f"mount {boot} {mnt_boot}")
 
 
-def sync_mirrors(country: str) -> None:
-    country = country.strip().capitalize()
-    run(
-        f"reflector --save /etc/pacman.d/mirrorlist.back --country {country} "
-        "--protocol https --latest 10"
-    )
-    # partial upgrades are not supported, but I'll take the risk
+def sync_mirrors() -> None:
     run("pacman -Sy pacman-contrib --noconfirm")
     run(
-        "rankmirrors -n 5 /etc/pacman.d/mirrorlist.back > /etc/pacman.d/mirrorlist"
+        "curl -s 'https://archlinux.org/mirrorlist/?protocol=https&use_mirror_status=on "
+        "| sed -e 's/^#Server/Server/' -e '/^#/d' "
+        "| rankmirrors -n 5 - > /etc/pacman.d/mirrorlist"
     )
 
 
 def genfstab(outfile: str) -> None:
-    run(f"genfstab -U /mnt >> {outfile}")
+    outfile = os.path.join(MOUNTPOINT, "/etc/fstab")
+    run(f"genfstab -U {MOUNTPOINT} >> {outfile}")
 
 
 def write_file(path: str, contents: str):
@@ -124,12 +125,12 @@ def bootstrap():
     cfg = load_config("config.toml")
     run("timedatectl set-ntp true")
     partion_the_disk(ask("Enter a disk to partition"))
-    sync_mirrors(cfg.country)
+    sync_mirrors()
     run(
-        f"pacstrap /mnt base base-devel {cfg.kernel_package} "
+        f"pacstrap {MOUNTPOINT} base base-devel {cfg.kernel_package} "
         "linux-firmware intel-ucode"
     )
-    genfstab("/mnt/etc/fstab")
+    genfstab()
     write_files("/mnt", cfg)
     arch_chroot_run(
         f"ln -sf /usr/share/zoneinfo/{cfg.time_zone} /etc/localtime"
@@ -139,4 +140,3 @@ def bootstrap():
     arch_chroot_run("mkinitcpio -P")
     arch_chroot_run("passwd")
     arch_chroot_run("bootctl --path=/boot install")
-    arch_chroot_run("reboot")
