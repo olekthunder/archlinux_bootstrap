@@ -93,7 +93,7 @@ def partition_the_disk(disk: archinstall.BlockDevice, cfg: AppConfig):
         # Encrypt root
         key_file = cfg.key_mountpoint / cfg.key_file
         SysCommand(
-            f"cryptsetup luksFormat {root.path} {key_file} --label cryptroot"
+            f"cryptsetup -q luksFormat {root.path} {key_file} --label cryptroot"
         )
         with archinstall.luks2(
             root, "cryptroot", key_file=key_file
