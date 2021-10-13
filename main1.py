@@ -97,8 +97,9 @@ def misc_install(stack: ExitStack, cfg: AppConfig):
         for locale in cfg.locales:
             fh.write(f"{locale}\n")
     with open(f"{i.target}/etc/locale.conf", "w") as fh:
-        for i, v in cfg.lc_conf_vars.items():
-            fh.write(f"{i}={v}\n")
+        for k, v in cfg.lc_conf_vars.items():
+            fh.write(f"{k}={v}\n")
+    SysCommand(f'/usr/bin/arch-chroot {i.target} locale-gen')
     SysCommand(f"/usr/bin/arch-chroot {i.target} chmod 700 /root")
     i.MODULES.append("vfat")
     i.mkinitcpio("-P")
