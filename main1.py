@@ -32,6 +32,15 @@ class Luks2(archinstall.luks2):
 
 
 @contextmanager
+def partition_mount(partition: archinstall.Partition, dst: str):
+    partition.mount(dst)
+    try:
+        yield
+    finally:
+        partition.umount()
+
+
+@contextmanager
 def mount_key(cfg: AppConfig):
     archinstall.SysCommand(f"mkdir {cfg.key_mountpoint}")
     archinstall.SysCommand(
@@ -72,15 +81,11 @@ def misc_install(stack: ExitStack, cfg: AppConfig):
     vendor = archinstall.cpu_vendor()
     if vendor == "AuthenticAMD":
         i.base_packages.append("amd-ucode")
-        if (
-            ucode := pathlib.Path(f"{i.target}/boot/amd-ucode.img")
-        ).exists():
+        if (ucode := pathlib.Path(f"{i.target}/boot/amd-ucode.img")).exists():
             ucode.unlink()
     elif vendor == "GenuineIntel":
         i.base_packages.append("intel-ucode")
-        if (
-            ucode := pathlib.Path(f"{i.target}/boot/intel-ucode.img")
-        ).exists():
+        if (ucode := pathlib.Path(f"{i.target}/boot/intel-ucode.img")).exists():
             ucode.unlink()
     i.pacstrap(i.base_packages)
     i.helper_flags["base-strapped"] = True
@@ -130,8 +135,8 @@ def partition_the_disk(
     archinstall.log("Formatting root as ext4")
     archinstall.SysCommand("mkfs.ext4 -L arch /dev/mapper/cryptroot")
     unlocked_root.filesystem = "ext4"
-    unlocked_root.mount("/mnt")
-    boot.mount("/mnt/boot")
+    stack.enter_context(partition_mount(unlocked_root, "/mnt"))
+    stack.enter_context(partition_mount(boot, "/mnt/boot"))
 
 
 def main():
@@ -142,7 +147,7 @@ def main():
     with ExitStack() as stack:
         stack.enter_context(mount_key(cfg))
         partition_the_disk(stack, archinstall.arguments["harddrive"], cfg)
-        misc_install(cfg)
+        misc_install(stack, cfg)
 
 
 if __name__ == "__main__":
