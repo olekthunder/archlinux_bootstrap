@@ -109,7 +109,7 @@ def main():
     archinstall.arguments["harddrive"] = archinstall.select_disk(
         archinstall.all_disks()
     )
-    with mount_key():
+    with mount_key(cfg):
         partition_the_disk(archinstall.arguments["harddrive"], cfg)
         misc_install(cfg)
 
