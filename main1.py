@@ -37,6 +37,7 @@ def partition_mount(partition: archinstall.Partition, dst: str):
     try:
         yield
     finally:
+        archinstall.log(f"unmounting {partition.path}")
         partition.umount()
 
 
