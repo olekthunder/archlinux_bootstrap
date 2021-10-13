@@ -28,7 +28,7 @@ class Luks2(archinstall.luks2):
         )
     
     def __enter__(self):
-        self.unlock(self.partition, self.mountpoint, self.key_file)
+        return self.unlock(self.partition, self.mountpoint, self.key_file)
 
 
 @contextmanager
