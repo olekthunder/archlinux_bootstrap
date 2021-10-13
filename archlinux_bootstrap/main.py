@@ -1,27 +1,57 @@
+import json
 import os
+import pathlib
 import subprocess
 import sys
 import time
-import json
-from dataclasses import dataclass
-from typing import Dict, Iterable, List
-from marshmallow import fields, Schema
+from dataclasses import dataclass, field
+from typing import Any, Dict, List
+
 import jinja2
+import marshmallow_dataclass
 import toml
-import pathlib
+from marshmallow import ValidationError, fields
 
-MOUNTPOINT="/mnt"
+MOUNTPOINT = "/mnt"
 
 
-class AppConfig(Schema):
-    kernel_package = fields.String()
-    time_zone = fields.String()
-    locales = fields.List(fields.String)
-    lc_conf_vars = fields.Dict(fields.String(), fields.String())
-    hostname = fields.String()
-    key_label = fields.Function(pathlib.Path)
-    key_mountpoint = fields.Function(pathlib.Path)
-    key_file = fields.Function(pathlib.Path)
+class PathField(fields.Field):
+    def _deserialize(
+        self,
+        value: Any,
+        *args,
+        **kwargs,
+    ):
+        if not value:
+            return ValidationError("Must'nt be empty")
+        return pathlib.Path(value)
+
+    def _serialize(self, value: pathlib.Path, *args, **kwargs):
+        return str(value)
+
+
+class PathField(fields.Field):
+    def _serialize(self, value, *args, **kwargs):
+        if value is None:
+            return ""
+        return str(value)
+
+    def _deserialize(self, value, *args, **kwargs):
+        return pathlib.Path(value)
+
+
+@dataclass
+class AppConfig:
+    kernel_package: str
+    time_zone: str
+    locales: List[str]
+    lc_conf_vars: Dict[str, str]
+    hostname: str
+    key_label: pathlib.Path = field(metadata={"marshmallow_field": PathField()})
+    key_mountpoint: pathlib.Path = field(
+        metadata={"marshmallow_field": PathField()}
+    )
+    key_file: pathlib.Path = field(metadata={"marshmallow_field": PathField()})
 
 
 def is_efi():
@@ -29,7 +59,7 @@ def is_efi():
 
 
 def load_config(location: str) -> AppConfig:
-    return AppConfig.from_dict(
+    return marshmallow_dataclass.class_schema(AppConfig)().load(
         toml.load(location)
     )
 
