@@ -92,6 +92,7 @@ def partition_the_disk(disk: archinstall.BlockDevice, cfg: AppConfig):
         root.encrypted = True
         # Encrypt root
         key_file = cfg.key_mountpoint / cfg.key_file
+        archinstall.log("Encrypting root...")
         SysCommand(
             f"cryptsetup -q luksFormat {root.path} {key_file} --label cryptroot"
         )
@@ -99,6 +100,7 @@ def partition_the_disk(disk: archinstall.BlockDevice, cfg: AppConfig):
             root, "cryptroot", key_file=key_file
         ) as unlocked_root:
             # Format root as ext4 and add "arch" label to it
+            archinstall.log("Formatting root as ext4")
             archinstall.SysCommand("mkfs.ext4 -L arch /dev/mapper/cryptroot")
             unlocked_root.mount("/mnt")
             boot.mount("/mnt/boot")
