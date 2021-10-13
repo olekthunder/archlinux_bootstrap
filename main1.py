@@ -124,11 +124,12 @@ def partition_the_disk(
         f"cryptsetup -q luksFormat {root.path} {key_file} --label cryptroot"
     )
     unlocked_root = stack.enter_context(
-        Luks2(root, "cryptroot", key_file=key_file)
+        Luks2(root, "cryptroot", key_file=key_file, auto_unmount=True)
     )
     # Format root as ext4 and add "arch" label to it
     archinstall.log("Formatting root as ext4")
     archinstall.SysCommand("mkfs.ext4 -L arch /dev/mapper/cryptroot")
+    unlocked_root.filesystem = "ext4"
     unlocked_root.mount("/mnt")
     boot.mount("/mnt/boot")
 
