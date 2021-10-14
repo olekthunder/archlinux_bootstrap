@@ -17,10 +17,7 @@ python main.py
 
 This script takes values from [config.toml](config.toml)
 
-You can also add files to [files](files) directory. They are jinja templates. `files` directory structure will be preserved, files will be overwritten. Every file template accepts `AppConfig`. 
-
 To add values to the `AppConfig` just add field type annotations
 and add your values to the [config.toml](config.toml).
 
 Partitioning is hardcoded to my preferred setup.
-You can edit the `partion_the_disk` function to suit your needs.
