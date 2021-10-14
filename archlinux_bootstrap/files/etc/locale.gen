@@ -1,3 +1,0 @@
-{% for l in cfg.locales %}
-    {{- l }}
-{% endfor %}
