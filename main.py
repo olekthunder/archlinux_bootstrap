@@ -105,10 +105,11 @@ def use_mirrors(regions: dict, destination="/etc/pacman.d/mirrorlist"):
 def rank_mirrors():
     archinstall.SysCommand("pacman -Sy pacman-contrib --noconfirm")
     archinstall.log("Ranking mirrors. It can take much time")
-    use_mirrors(archinstall.list_mirrors())
+    dst = "/etc/pacman.d/mirrorlist.backup"
+    use_mirrors(archinstall.list_mirrors(), dst)
     archinstall.SysCommand(
         '/bin/sh -c "/usr/bin/rankmirrors -n 5 '
-        '/etc/pacman.d/mirrorlist > /etc/pacman.d/mirrorlist"'
+        '{dst} > /etc/pacman.d/mirrorlist"'
     )
 
 
