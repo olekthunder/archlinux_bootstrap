@@ -2,7 +2,7 @@ import logging
 import pathlib
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Mapping
 
 import archinstall
 import marshmallow_dataclass
@@ -88,29 +88,36 @@ def mount_key(cfg: Config):
         archinstall.SysCommand(f"umount {cfg.key_mountpoint}")
         archinstall.SysCommand(f"rmdir {cfg.key_mountpoint}")
 
+def use_mirrors(
+	regions: Mapping[str, Iterable[str]],
+	destination: str ='/etc/pacman.d/mirrorlist'
+) -> bool:
+	with open(destination, 'w') as mirrorlist:
+		for region, mirrors in regions.items():
+			for mirror in mirrors:
+				mirrorlist.write(f'## {region}\n')
+				mirrorlist.write(f'Server = {mirror}\n')
+	return True
 
-def use_mirrors(regions: dict, destination="/etc/pacman.d/mirrorlist"):
-    archinstall.log(
-        f"A new package mirror-list has been created: {destination}",
-        level=logging.INFO,
-    )
-    with open(destination, "w") as mirrorlist:
-        for region, mirrors in regions.items():
-            for mirror in mirrors:
-                mirrorlist.write(f"## {region}\n")
-                mirrorlist.write(f"Server = {mirror}\n")
-    return True
+
+def re_rank_mirrors(
+	top: int = 10,
+	src: str = '/etc/pacman.d/mirrorlist',
+	dst: str = '/etc/pacman.d/mirrorlist',
+) -> bool:
+	cmd = archinstall.SysCommand(f"/usr/bin/rankmirrors -n {top} {src}")
+	if cmd.exit_code != 0:
+		return False
+	with open(dst, 'w') as f:
+		f.write(str(cmd))
+	return True
 
 
 def rank_mirrors():
     archinstall.SysCommand("pacman -Sy pacman-contrib --noconfirm")
     archinstall.log("Ranking mirrors. It can take much time")
-    dst = "/etc/pacman.d/mirrorlist.backup"
-    use_mirrors(archinstall.list_mirrors(), dst)
-    archinstall.SysCommand(
-        '/bin/sh -c "/usr/bin/rankmirrors -n 5 '
-        f'{dst} > /etc/pacman.d/mirrorlist"'
-    )
+    use_mirrors(archinstall.list_mirrors())
+    re_rank_mirrors(5)
 
 
 def setup_bootloader(i: archinstall.Installer, cfg: Config, kernel: str):
