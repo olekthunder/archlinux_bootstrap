@@ -109,7 +109,7 @@ def rank_mirrors():
     use_mirrors(archinstall.list_mirrors(), dst)
     archinstall.SysCommand(
         '/bin/sh -c "/usr/bin/rankmirrors -n 5 '
-        '{dst} > /etc/pacman.d/mirrorlist"'
+        f'{dst} > /etc/pacman.d/mirrorlist"'
     )
 
 
