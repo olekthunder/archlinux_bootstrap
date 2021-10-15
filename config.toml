@@ -1,3 +1,4 @@
+user = "olekthunder"
 kernel_package = "linux-lts"
 time_zone = "Europe/Kiev"
 hostname = "gimli"
