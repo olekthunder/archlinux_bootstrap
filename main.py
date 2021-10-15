@@ -93,7 +93,9 @@ def rank_mirrors():
     archinstall.SysCommand("pacman -Sy pacman-contrib --noconfirm")
     archinstall.log("Ranking mirrors. It can take much time")
     archinstall.use_mirrors(archinstall.list_mirrors())
-    archinstall.re_rank_mirrors(5)
+    archinstall.SysCommand(
+        '/bin/sh -c "/usr/bin/rankmirrors -n 5 > /etc/pacman.d/mirrorlist"'
+    )
 
 
 def setup_bootloader(i: archinstall.Installer, cfg: Config, kernel: str):
