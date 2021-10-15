@@ -120,7 +120,10 @@ def rank_mirrors():
     re_rank_mirrors(5)
 
 
-def setup_bootloader(i: archinstall.Installer, cfg: Config, kernel: str):
+def setup_bootloader(
+    i: archinstall.Installer,
+    cfg: Config,
+):
     i.arch_chroot("bootctl --path=/boot install")
     with open(f"{i.target}/boot/loader/loader.conf", "w") as loader:
         loader.write("default arch\n")
@@ -128,13 +131,13 @@ def setup_bootloader(i: archinstall.Installer, cfg: Config, kernel: str):
         loader.write("editor no\n")
     with open(f"{i.target}/boot/loader/entries/arch.conf", "w") as entry:
         entry.write("title Arch Linux\n")
-        entry.write(f"linux /vmlinuz-{kernel}\n")
+        entry.write(f"linux /vmlinuz-{cfg.kernel_package}\n")
         vendor = archinstall.cpu_vendor()
         if vendor == "AuthenticAMD":
             entry.write("initrd /amd-ucode.img\n")
         elif vendor == "GenuineIntel":
             entry.write("initrd /intel-ucode.img\n")
-        entry.write(f"initrd /initramfs-{kernel}.img\n")
+        entry.write(f"initrd /initramfs-{cfg.kernel_package}.img\n")
         entry.write(
             "options cryptdevice=LABEL=cryptroot:cryptroot "
             f"cryptkey=LABEL={cfg.key_label}:vfat:{cfg.key_file} "
