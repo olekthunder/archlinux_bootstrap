@@ -94,7 +94,8 @@ def rank_mirrors():
     archinstall.log("Ranking mirrors. It can take much time")
     archinstall.use_mirrors(archinstall.list_mirrors())
     archinstall.SysCommand(
-        '/bin/sh -c "/usr/bin/rankmirrors -n 5 > /etc/pacman.d/mirrorlist"'
+        '/bin/sh -c "/usr/bin/rankmirrors -n 5 '
+        '/etc/pacman.d/mirrorlist > /etc/pacman.d/mirrorlist"'
     )
 
 
