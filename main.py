@@ -89,10 +89,23 @@ def mount_key(cfg: Config):
         archinstall.SysCommand(f"rmdir {cfg.key_mountpoint}")
 
 
+def use_mirrors(regions: dict, destination="/etc/pacman.d/mirrorlist"):
+    archinstall.log(
+        f"A new package mirror-list has been created: {destination}",
+        level=logging.INFO,
+    )
+    with open(destination, "w") as mirrorlist:
+        for region, mirrors in regions.items():
+            for mirror in mirrors:
+                mirrorlist.write(f"## {region}\n")
+                mirrorlist.write(f"Server = {mirror}\n")
+    return True
+
+
 def rank_mirrors():
     archinstall.SysCommand("pacman -Sy pacman-contrib --noconfirm")
     archinstall.log("Ranking mirrors. It can take much time")
-    archinstall.use_mirrors(archinstall.list_mirrors())
+    use_mirrors(archinstall.list_mirrors())
     archinstall.SysCommand(
         '/bin/sh -c "/usr/bin/rankmirrors -n 5 '
         '/etc/pacman.d/mirrorlist > /etc/pacman.d/mirrorlist"'
