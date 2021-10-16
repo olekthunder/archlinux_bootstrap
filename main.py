@@ -1,7 +1,9 @@
 import logging
 import pathlib
+import re
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, field
+from enum import Enum, auto
 from typing import Dict, Iterable, List, Mapping
 
 import archinstall
@@ -187,6 +189,41 @@ def install_aur_package(i: archinstall.Installer, *packages: str):
     i.arch_chroot(f"paru -S {' '.join(packages)}")
 
 
+def add_groups(i: archinstall.Installer, user: str, *groups: str):
+    if len(groups) > 0:
+        i.arch_chroot(f"usermod -aG {','.join(groups)} {user}")
+
+
+class GPUManufacturer(Enum):
+    INTEL = auto()
+
+
+def get_gpu_manufacturer() -> GPUManufacturer:
+    lspci = str(archinstall.SysCommand("lspci"))
+    if "Intel" in lspci:
+        return GPUManufacturer.INTEL
+    raise NotImplementedError()
+
+
+def setup_xorg(i: archinstall.Installer, cfg: Config):
+    i.pacstrap("lightdm", "xorg-server")
+    i.enable_service("lightdm")
+    i.arch_chroot("groupadd -r autologin")
+    add_groups(i, cfg.user, "autologin")
+    with open(f"{i.target}/etc/lightdm/lightdm.conf") as f:
+        txt = f.read()
+        match = re.search(r"^\[Seat:\*\]", txt, flags=re.MULTILINE)
+        if match is None:
+            raise NotImplementedError()
+        txt = (
+            txt[: match.end()]
+            + f"\nautologin-user={cfg.user}\n"
+            + txt[match.end() :]
+        )
+    with open(f"{i.target}/etc/lightdm/lightdm.conf") as f:
+        f.write(txt)
+
+
 def misc_install(stack: ExitStack, cfg: Config):
     i = stack.enter_context(
         archinstall.Installer("/mnt", kernels=[cfg.kernel_package])
@@ -233,6 +270,7 @@ def misc_install(stack: ExitStack, cfg: Config):
     add_user(i, cfg)
     setup_aur_helper(i, cfg)
     setup_network(i)
+    setup_xorg(i, cfg)
     i.install_profile(archinstall.storage["PROFILE"])
 
 
