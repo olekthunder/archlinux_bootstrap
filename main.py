@@ -88,29 +88,30 @@ def mount_key(cfg: Config):
         archinstall.SysCommand(f"umount {cfg.key_mountpoint}")
         archinstall.SysCommand(f"rmdir {cfg.key_mountpoint}")
 
+
 def use_mirrors(
-	regions: Mapping[str, Iterable[str]],
-	destination: str ='/etc/pacman.d/mirrorlist'
+    regions: Mapping[str, Iterable[str]],
+    destination: str = "/etc/pacman.d/mirrorlist",
 ) -> bool:
-	with open(destination, 'w') as mirrorlist:
-		for region, mirrors in regions.items():
-			for mirror in mirrors:
-				mirrorlist.write(f'## {region}\n')
-				mirrorlist.write(f'Server = {mirror}\n')
-	return True
+    with open(destination, "w") as mirrorlist:
+        for region, mirrors in regions.items():
+            for mirror in mirrors:
+                mirrorlist.write(f"## {region}\n")
+                mirrorlist.write(f"Server = {mirror}\n")
+    return True
 
 
 def re_rank_mirrors(
-	top: int = 10,
-	src: str = '/etc/pacman.d/mirrorlist',
-	dst: str = '/etc/pacman.d/mirrorlist',
+    top: int = 10,
+    src: str = "/etc/pacman.d/mirrorlist",
+    dst: str = "/etc/pacman.d/mirrorlist",
 ) -> bool:
-	cmd = archinstall.SysCommand(f"/usr/bin/rankmirrors -n {top} {src}")
-	if cmd.exit_code != 0:
-		return False
-	with open(dst, 'w') as f:
-		f.write(str(cmd))
-	return True
+    cmd = archinstall.SysCommand(f"/usr/bin/rankmirrors -n {top} {src}")
+    if cmd.exit_code != 0:
+        return False
+    with open(dst, "w") as f:
+        f.write(str(cmd))
+    return True
 
 
 def rank_mirrors():
@@ -146,11 +147,11 @@ def setup_bootloader(
     i.helper_flags["bootloader"] = "systemd-bootctl"
 
 
-def add_user(i: archinstall.Installer, cfg: Config):
+def add_user(i: archinstall.Installer, cfg: Config, password: str):
     i.user_create(cfg.user)
     i.user_set_pw(
         cfg.user,
-        archinstall.get_password(prompt=f"Enter password for {cfg.user}: "),
+        password,
     )
     i.enable_sudo(cfg.user)
 
@@ -166,13 +167,12 @@ def setup_network(i: archinstall.Installer):
         f.write("dns=systemd-resolved\n")
 
 
-def setup_aur_helper(i: archinstall.Installer, cfg: Config):
+def setup_aur_helper(i: archinstall.Installer, cfg: Config, user_pw: str):
     i.pacstrap("base-devel", "git")
     try:
         i.arch_chroot(
-            'sh -c "'
             "git clone https://aur.archlinux.org/paru.git "
-            '&& cd paru/ && makepkg -si --noconfirm"',
+            f"&& cd paru/ && echo {user_pw} | makepkg -si --noconfirm",
             runas=cfg.user,
         )
     finally:
@@ -226,8 +226,9 @@ def misc_install(stack: ExitStack, cfg: Config):
         )
         function(i)
     setup_bootloader(i, cfg)
-    add_user(i, cfg)
-    setup_aur_helper(i, cfg)
+    user_pw = archinstall.get_password(prompt=f"Enter password for {cfg.user}: ")
+    add_user(i, cfg, user_pw)
+    setup_aur_helper(i, cfg, user_pw)
     setup_network(i)
     archinstall.select_profile().install()
 
