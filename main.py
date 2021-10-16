@@ -147,11 +147,15 @@ def setup_bootloader(
     i.helper_flags["bootloader"] = "systemd-bootctl"
 
 
-def add_user(i: archinstall.Installer, cfg: Config, password: str):
+def get_user_pass() -> str:
+    return archinstall.storage["USER_PASSWORD"]
+
+
+def add_user(i: archinstall.Installer, cfg: Config):
     i.user_create(cfg.user)
     i.user_set_pw(
         cfg.user,
-        password,
+        get_user_pass(),
     )
     i.enable_sudo(cfg.user)
 
@@ -167,19 +171,19 @@ def setup_network(i: archinstall.Installer):
         f.write("dns=systemd-resolved\n")
 
 
-def setup_aur_helper(i: archinstall.Installer, cfg: Config, user_pw: str):
+def setup_aur_helper(i: archinstall.Installer, cfg: Config):
     i.pacstrap("base-devel", "git")
     try:
         i.arch_chroot(
             "git clone https://aur.archlinux.org/paru.git "
-            f"&& cd paru/ && echo {user_pw} | makepkg -si --noconfirm",
+            f"&& cd paru/ && echo {get_user_pass()} | makepkg -si --noconfirm",
             runas=cfg.user,
         )
     finally:
         i.arch_chroot("rm paru -rf")
 
 
-def install_aur_package(i: archinstall.Installer, *packages: Iterable[str]):
+def install_aur_package(i: archinstall.Installer, *packages: str):
     i.arch_chroot(f"paru -S {' '.join(packages)}")
 
 
@@ -226,11 +230,9 @@ def misc_install(stack: ExitStack, cfg: Config):
         )
         function(i)
     setup_bootloader(i, cfg)
-    user_pw = archinstall.get_password(prompt=f"Enter password for {cfg.user}: ")
-    add_user(i, cfg, user_pw)
-    setup_aur_helper(i, cfg, user_pw)
+    add_user(i, cfg)
+    setup_aur_helper(i, cfg)
     setup_network(i)
-    archinstall.select_profile().install()
 
 
 def partition_the_disk(
@@ -265,10 +267,15 @@ def main():
     archinstall.arguments["harddrive"] = archinstall.select_disk(
         archinstall.all_disks()
     )
+    archinstall.storage["USER_PASSWORD"] = archinstall.get_password(
+        prompt=f"Enter password for {cfg.user}: "
+    )
+    archinstall.storage["PROFILE"] = archinstall.select_profile()
     with ExitStack() as stack:
         stack.enter_context(mount_key(cfg))
         partition_the_disk(stack, archinstall.arguments["harddrive"], cfg)
         misc_install(stack, cfg)
+        archinstall.storage["PROFILE"].install()
 
 
 if __name__ == "__main__":
