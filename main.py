@@ -156,7 +156,7 @@ def add_user(i: archinstall.Installer, cfg: Config):
 
 
 def setup_network(i: archinstall.Installer):
-    i.pacstrap("networkmanager", "systemd-resolved")
+    i.pacstrap("networkmanager", "systemd")
     i.enable_service("NetworkManager", "systemd-resolved")
     i.arch_chroot(
         "ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf"
@@ -166,13 +166,14 @@ def setup_network(i: archinstall.Installer):
         f.write("dns=systemd-resolved\n")
 
 
-def setup_aur_helper(i: archinstall.Installer):
+def setup_aur_helper(i: archinstall.Installer, cfg: Config):
     i.pacstrap("base-devel", "git")
     try:
         i.arch_chroot(
             'sh -c "'
             "git clone https://aur.archlinux.org/paru.git "
             '&& cd paru/ && makepkg -si --noconfirm"',
+            runas=cfg.user,
         )
     finally:
         i.arch_chroot("rm paru -rf")
@@ -226,7 +227,7 @@ def misc_install(stack: ExitStack, cfg: Config):
         function(i)
     setup_bootloader(i, cfg)
     add_user(i, cfg)
-    setup_aur_helper(i)
+    setup_aur_helper(i, cfg)
     setup_network(i)
     archinstall.select_profile().install()
 
