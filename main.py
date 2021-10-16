@@ -233,6 +233,7 @@ def misc_install(stack: ExitStack, cfg: Config):
     add_user(i, cfg)
     setup_aur_helper(i, cfg)
     setup_network(i)
+    i.install_profile(archinstall.storage["PROFILE"])
 
 
 def partition_the_disk(
@@ -275,7 +276,6 @@ def main():
         stack.enter_context(mount_key(cfg))
         partition_the_disk(stack, archinstall.arguments["harddrive"], cfg)
         misc_install(stack, cfg)
-        archinstall.storage["PROFILE"].install()
 
 
 if __name__ == "__main__":
