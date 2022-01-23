@@ -206,7 +206,7 @@ def get_gpu_manufacturer() -> GPUManufacturer:
 
 
 def setup_xorg(i: archinstall.Installer, cfg: Config):
-    i.pacstrap("lightdm", "xorg-server")
+    i.pacstrap("lightdm", "xorg-server", "lightdm-gtk-greeter")
     i.enable_service("lightdm")
     i.arch_chroot("groupadd -r autologin")
     add_groups(i, cfg.user, "autologin")
